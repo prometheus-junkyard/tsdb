@@ -54,6 +54,9 @@ type Series interface {
 
 	// Iterator returns a new iterator of the data of the series.
 	Iterator() SeriesIterator
+
+	// ChunkIterator returns a new iterator of the chunks of the series.
+	ChunkIterator() ChunkIterator
 }
 
 // querier aggregates querying results from time blocks within
@@ -876,6 +879,10 @@ func (s *chunkSeries) Iterator() SeriesIterator {
 	return newChunkSeriesIterator(s.chunks, s.intervals, s.mint, s.maxt)
 }
 
+func (s *chunkSeries) ChunkIterator() ChunkIterator {
+	return &chunkIterator{chunks: s.chunks}
+}
+
 // SeriesIterator iterates over the data of a time series.
 type SeriesIterator interface {
 	// Seek advances the iterator forward to the given timestamp.
@@ -902,6 +909,14 @@ func (s *chainedSeries) Labels() labels.Labels {
 
 func (s *chainedSeries) Iterator() SeriesIterator {
 	return newChainedSeriesIterator(s.series...)
+}
+
+func (s *chainedSeries) ChunkIterator() ChunkIterator {
+	ch := &chainedChunkIterator{chain: make([]ChunkIterator, 0, len(s.series))}
+	for _, s := range s.series {
+		ch.chain = append(ch.chain, s.ChunkIterator())
+	}
+	return ch
 }
 
 // chainedSeriesIterator implements a series iterater over a list
@@ -973,6 +988,14 @@ func (s *verticalChainedSeries) Labels() labels.Labels {
 
 func (s *verticalChainedSeries) Iterator() SeriesIterator {
 	return newVerticalMergeSeriesIterator(s.series...)
+}
+
+func (s *verticalChainedSeries) ChunkIterator() ChunkIterator {
+	ch := &chainedChunkIterator{chain: make([]ChunkIterator, 0, len(s.series))}
+	for _, s := range s.series {
+		ch.chain = append(ch.chain, s.ChunkIterator())
+	}
+	return ch
 }
 
 // verticalMergeSeriesIterator implements a series iterater over a list
@@ -1210,3 +1233,62 @@ type errSeriesSet struct {
 func (s errSeriesSet) Next() bool { return false }
 func (s errSeriesSet) At() Series { return nil }
 func (s errSeriesSet) Err() error { return s.err }
+
+// ChunkIterator iterates over the chunk of a time series.
+type ChunkIterator interface {
+	// At returns the meta.
+	At() chunks.Meta
+	// Next advances the iterator by one.
+	Next() bool
+	// Err returns optional error if Next is false.
+	Err() error
+}
+
+type chunkIterator struct {
+	chunks []chunks.Meta
+	i      int
+}
+
+func (c *chunkIterator) Next() bool {
+	if c.i >= len(c.chunks) {
+		return false
+	}
+	c.i++
+	return true
+}
+
+func (c *chunkIterator) At() chunks.Meta {
+	return c.chunks[c.i-1]
+}
+
+func (c *chunkIterator) Err() error { return nil }
+
+type chainedChunkIterator struct {
+	chain []ChunkIterator
+	i     int
+	err   error
+}
+
+func (c *chainedChunkIterator) Next() bool {
+	if c.Err() != nil {
+		return false
+	}
+
+	for c.i < len(c.chain) {
+		if c.chain[c.i].Next() {
+			return true
+		}
+		if err := c.chain[c.i].Err(); err != nil {
+			c.err = err
+			return false
+		}
+		c.i++
+	}
+	return false
+}
+
+func (c *chainedChunkIterator) At() chunks.Meta {
+	return c.chain[c.i].At()
+}
+
+func (c *chainedChunkIterator) Err() error { return c.err }

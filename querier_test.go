@@ -188,6 +188,13 @@ func expandSeriesIterator(it SeriesIterator) (r []tsdbutil.Sample, err error) {
 	return r, it.Err()
 }
 
+func expandChunkIterator(it ChunkIterator) (chks []chunks.Meta) {
+	for it.Next() {
+		chks = append(chks, it.At())
+	}
+	return chks
+}
+
 type seriesSamples struct {
 	lset   map[string]string
 	chunks [][]sample
@@ -661,8 +668,9 @@ type itSeries struct {
 	si SeriesIterator
 }
 
-func (s itSeries) Iterator() SeriesIterator { return s.si }
-func (s itSeries) Labels() labels.Labels    { return labels.Labels{} }
+func (s itSeries) Iterator() SeriesIterator     { return s.si }
+func (s itSeries) Labels() labels.Labels        { return labels.Labels{} }
+func (s itSeries) ChunkIterator() ChunkIterator { return nil }
 
 func TestSeriesIterator(t *testing.T) {
 	itcases := []struct {
@@ -1042,6 +1050,46 @@ func TestSeriesIterator(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestChunkIterator(t *testing.T) {
+	it := &chunkIterator{}
+	testutil.Equals(t, []chunks.Meta(nil), expandChunkIterator(it))
+	testutil.Equals(t, false, it.Next())
+
+	chks := []chunks.Meta{
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{1, 1}, sample{1, 2}}),
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{2, 1}, sample{2, 2}}),
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{3, 1}, sample{3, 2}}),
+	}
+	it = &chunkIterator{chunks: chks}
+	testutil.Equals(t, chks, expandChunkIterator(it))
+	testutil.Equals(t, false, it.Next())
+}
+
+func TestChainedChunkIterator(t *testing.T) {
+	it := &chainedChunkIterator{}
+	testutil.Equals(t, []chunks.Meta(nil), expandChunkIterator(it))
+	testutil.Equals(t, false, it.Next())
+
+	chks1 := []chunks.Meta{
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{1, 1}, sample{1, 2}}),
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{2, 1}, sample{2, 2}}),
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{3, 1}, sample{3, 2}}),
+	}
+	chks2 := []chunks.Meta(nil)
+	chks3 := []chunks.Meta{
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{4, 1}, sample{4, 2}}),
+		tsdbutil.ChunkFromSamples([]tsdbutil.Sample{sample{5, 1}, sample{5, 2}}),
+	}
+
+	it = &chainedChunkIterator{chain: []ChunkIterator{
+		&chunkIterator{chunks: chks1},
+		&chunkIterator{chunks: chks2},
+		&chunkIterator{chunks: chks3},
+	}}
+	testutil.Equals(t, append(chks1, chks3...), expandChunkIterator(it))
+	testutil.Equals(t, false, it.Next())
 }
 
 // Regression for: https://github.com/prometheus/tsdb/pull/97
@@ -1439,8 +1487,9 @@ func newSeries(l map[string]string, s []tsdbutil.Sample) Series {
 		iterator: func() SeriesIterator { return newListSeriesIterator(s) },
 	}
 }
-func (m *mockSeries) Labels() labels.Labels    { return m.labels() }
-func (m *mockSeries) Iterator() SeriesIterator { return m.iterator() }
+func (m *mockSeries) Labels() labels.Labels        { return m.labels() }
+func (m *mockSeries) Iterator() SeriesIterator     { return m.iterator() }
+func (m *mockSeries) ChunkIterator() ChunkIterator { return nil }
 
 type listSeriesIterator struct {
 	list []tsdbutil.Sample

@@ -6,6 +6,7 @@
     - `DBReadOnly.Blocks()` exposes a slice of `BlockReader`s.
     - `BlockReader` interface - removed MinTime/MaxTime methods and now exposes the full block meta via `Meta()`.
  - [FEATURE] `chunckenc.Chunk.Iterator` method now takes a `chunckenc.Iterator` interface as an argument for reuse.
+ - [CHANGE] `Series` interface allows return chunk iterator that allows iterating over encoded chunks.
 
 ## 0.9.1
 
