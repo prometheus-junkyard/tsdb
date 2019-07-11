@@ -54,6 +54,9 @@ type Series interface {
 
 	// Iterator returns a new iterator of the data of the series.
 	Iterator() SeriesIterator
+
+	// Chunks returns a copy of the compressed chunks that make up this series.
+	Chunks() []chunks.Meta
 }
 
 // querier aggregates querying results from time blocks within
@@ -876,6 +879,10 @@ func (s *chunkSeries) Iterator() SeriesIterator {
 	return newChunkSeriesIterator(s.chunks, s.intervals, s.mint, s.maxt)
 }
 
+func (s *chunkSeries) Chunks() []chunks.Meta {
+	return s.chunks
+}
+
 // SeriesIterator iterates over the data of a time series.
 type SeriesIterator interface {
 	// Seek advances the iterator forward to the given timestamp.
@@ -902,6 +909,14 @@ func (s *chainedSeries) Labels() labels.Labels {
 
 func (s *chainedSeries) Iterator() SeriesIterator {
 	return newChainedSeriesIterator(s.series...)
+}
+
+func (s *chainedSeries) Chunks() []chunks.Meta {
+	var chunks []chunks.Meta
+	for _, s := range s.series {
+		chunks = append(s.Chunks())
+	}
+	return chunks
 }
 
 // chainedSeriesIterator implements a series iterater over a list
@@ -959,6 +974,14 @@ func (it *chainedSeriesIterator) At() (t int64, v float64) {
 
 func (it *chainedSeriesIterator) Err() error {
 	return it.cur.Err()
+}
+
+func (s *verticalChainedSeries) Chunks() []chunks.Meta {
+	var chunks []chunks.Meta
+	for _, s := range s.series {
+		chunks = append(s.Chunks())
+	}
+	return chunks
 }
 
 // verticalChainedSeries implements a series for a list of time-sorted, time-overlapping series.

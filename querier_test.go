@@ -663,6 +663,7 @@ type itSeries struct {
 
 func (s itSeries) Iterator() SeriesIterator { return s.si }
 func (s itSeries) Labels() labels.Labels    { return labels.Labels{} }
+func (s itSeries) Chunks() []chunks.Meta    { return nil }
 
 func TestSeriesIterator(t *testing.T) {
 	itcases := []struct {
@@ -1441,6 +1442,7 @@ func newSeries(l map[string]string, s []tsdbutil.Sample) Series {
 }
 func (m *mockSeries) Labels() labels.Labels    { return m.labels() }
 func (m *mockSeries) Iterator() SeriesIterator { return m.iterator() }
+func (m *mockSeries) Chunks() []chunks.Meta    { return nil }
 
 type listSeriesIterator struct {
 	list []tsdbutil.Sample
