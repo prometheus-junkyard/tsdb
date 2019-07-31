@@ -919,7 +919,7 @@ func (s *chainedSeries) ChunkIterator() ChunkIterator {
 	return ch
 }
 
-// chainedSeriesIterator implements a series iterater over a list
+// chainedSeriesIterator implements a series iterated over a list
 // of time-sorted, non-overlapping iterators.
 type chainedSeriesIterator struct {
 	series []Series // series in time order
@@ -1245,7 +1245,7 @@ type ChunkIterator interface {
 }
 
 type chunkIterator struct {
-	chunks []chunks.Meta
+	chunks []chunks.Meta // series in time order
 	i      int
 }
 
@@ -1263,8 +1263,10 @@ func (c *chunkIterator) At() chunks.Meta {
 
 func (c *chunkIterator) Err() error { return nil }
 
+// chainedChunkIterator implements flat iteration for chunks iterated over a list
+// of time-sorted, non-overlapping iterators for each series.
 type chainedChunkIterator struct {
-	chain []ChunkIterator
+	chain []ChunkIterator // chunk iterators for each series in time order
 	i     int
 	err   error
 }
