@@ -990,12 +990,10 @@ func (s *verticalChainedSeries) Iterator() SeriesIterator {
 	return newVerticalMergeSeriesIterator(s.series...)
 }
 
+// ChunkIterator is currently not implemented.
+// TODO(bwplotka): Implement once we will want to use chunks in vertical compaction.
 func (s *verticalChainedSeries) ChunkIterator() ChunkIterator {
-	ch := &chainedChunkIterator{chain: make([]ChunkIterator, 0, len(s.series))}
-	for _, s := range s.series {
-		ch.chain = append(ch.chain, s.ChunkIterator())
-	}
-	return ch
+	return errChunkIterator{err: errors.New("Not Implemented")}
 }
 
 // verticalMergeSeriesIterator implements a series iterater over a list
@@ -1243,6 +1241,14 @@ type ChunkIterator interface {
 	// Err returns optional error if Next is false.
 	Err() error
 }
+
+type errChunkIterator struct {
+	err error
+}
+
+func (s errChunkIterator) Next() bool      { return false }
+func (s errChunkIterator) At() chunks.Meta { return chunks.Meta{} }
+func (s errChunkIterator) Err() error      { return s.err }
 
 type chunkIterator struct {
 	chunks []chunks.Meta // series in time order
