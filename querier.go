@@ -1027,6 +1027,10 @@ func (it *verticalMergeSeriesIterator) Seek(t int64) bool {
 }
 
 func (it *verticalMergeSeriesIterator) Next() bool {
+	if it.Err() != nil {
+		return false
+	}
+
 	if !it.initialized {
 		it.aok = it.a.Next()
 		it.bok = it.b.Next()
@@ -1075,23 +1079,6 @@ func (it *verticalMergeSeriesIterator) Err() error {
 	return it.b.Err()
 }
 
-type noSeekSeriesIterator struct {
-	chunkenc.Iterator
-	err error
-}
-
-func (it *noSeekSeriesIterator) Seek(t int64) bool {
-	it.err = errors.New("not implemented: Seek method invoked for noSeekSeriesIterator")
-	return false
-}
-
-func (it *noSeekSeriesIterator) Err() error {
-	if it.err != nil {
-		return it.err
-	}
-	return it.Iterator.Err()
-}
-
 // verticalMergeChunkIterator implements a ChunkIterator over a list
 // of time-sorted, time-overlapping chunk iterators for the same labels (same series).
 // Any overlap in chunks will be merged using verticalMergeSeriesIterator.
@@ -1121,6 +1108,10 @@ func newVerticalMergeChunkIterator(s ...Series) ChunkIterator {
 }
 
 func (it *verticalMergeChunkIterator) Next() bool {
+	if it.Err() != nil {
+		return false
+	}
+
 	if !it.initialized {
 		it.aok = it.a.Next()
 		it.bok = it.b.Next()
@@ -1164,8 +1155,8 @@ func (it *verticalMergeChunkIterator) Next() bool {
 		return false
 	}
 	seriesIter := &verticalMergeSeriesIterator{
-		a: &noSeekSeriesIterator{Iterator: aCurMeta.Chunk.Iterator(it.aReuseIter)},
-		b: &noSeekSeriesIterator{Iterator: bCurMeta.Chunk.Iterator(it.bReuseIter)},
+		a: aCurMeta.Chunk.Iterator(it.aReuseIter),
+		b: bCurMeta.Chunk.Iterator(it.bReuseIter),
 	}
 
 	mint := int64(math.MaxInt64)
@@ -1194,6 +1185,12 @@ func (it *verticalMergeChunkIterator) Next() bool {
 	it.aok = it.a.Next()
 	it.bok = it.b.Next()
 	return true
+}
+
+func (it *verticalMergeChunkIterator) Seek(t int64) bool {
+	it.aok, it.bok = it.a.Seek(t), it.b.Seek(t)
+	it.initialized = true
+	return it.Next()
 }
 
 func (it *verticalMergeChunkIterator) At() chunks.Meta {
@@ -1330,6 +1327,19 @@ func (it *deletedIterator) At() (int64, float64) {
 	return it.it.At()
 }
 
+func (it *deletedIterator) Seek(t int64) bool {
+	if atT, _ := it.At(); t >= atT {
+		return false
+	}
+
+	for it.Next() {
+		if atT, _ := it.At(); t >= atT {
+			return true
+		}
+	}
+	return false
+}
+
 func (it *deletedIterator) Next() bool {
 Outer:
 	for it.it.Next() {
@@ -1368,6 +1378,9 @@ func (s errSeriesSet) Err() error { return s.err }
 
 // ChunkIterator iterates over the chunk of a time series.
 type ChunkIterator interface {
+	// Seek advances the iterator forward to the given timestamp.
+	// It advances to the chunk with min time at t or first chunk with min time after t.
+	Seek(t int64) bool
 	// At returns the meta.
 	At() chunks.Meta
 	// Next advances the iterator by one.
@@ -1376,17 +1389,22 @@ type ChunkIterator interface {
 	Err() error
 }
 
-type errChunkIterator struct {
-	err error
-}
-
-func (s errChunkIterator) Next() bool      { return false }
-func (s errChunkIterator) At() chunks.Meta { return chunks.Meta{} }
-func (s errChunkIterator) Err() error      { return s.err }
-
 type chunkIterator struct {
 	chunks []chunks.Meta // series in time order
 	i      int
+}
+
+func (c *chunkIterator) Seek(t int64) bool {
+	if c.i >= len(c.chunks) {
+		return false
+	}
+
+	for c.Next() {
+		if t >= c.At().MinTime {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *chunkIterator) Next() bool {
@@ -1409,6 +1427,24 @@ type chainedChunkIterator struct {
 	chain []ChunkIterator // chunk iterators for each series in time order
 	i     int
 	err   error
+}
+
+func (c *chainedChunkIterator) Seek(t int64) bool {
+	if c.Err() != nil {
+		return false
+	}
+
+	for c.i < len(c.chain) {
+		if c.chain[c.i].Seek(t) {
+			return true
+		}
+		if err := c.chain[c.i].Err(); err != nil {
+			c.err = err
+			return false
+		}
+		c.i++
+	}
+	return false
 }
 
 func (c *chainedChunkIterator) Next() bool {

@@ -58,9 +58,16 @@ type Appender interface {
 
 // Iterator is a simple iterator that can only get the next value.
 type Iterator interface {
+	// Seek advances the iterator forward to the given timestamp.
+	// If there's no value exactly at t, it advances to the first value
+	// after t.
+	Seek(t int64) bool
+	// At returns the current timestamp/value pair.
 	At() (int64, float64)
-	Err() error
+	// Next advances the iterator by one.
 	Next() bool
+	// Err returns the current error.
+	Err() error
 }
 
 // NewNopIterator returns a new chunk iterator that does not hold any data.
@@ -70,6 +77,7 @@ func NewNopIterator() Iterator {
 
 type nopIterator struct{}
 
+func (nopIterator) Seek(t int64) bool    { return false }
 func (nopIterator) At() (int64, float64) { return 0, 0 }
 func (nopIterator) Next() bool           { return false }
 func (nopIterator) Err() error           { return nil }

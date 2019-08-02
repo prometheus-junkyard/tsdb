@@ -241,6 +241,19 @@ type xorIterator struct {
 	err    error
 }
 
+func (it *xorIterator) Seek(t int64) bool {
+	if t >= it.t {
+		return false
+	}
+
+	for it.Next() {
+		if t >= it.t {
+			return true
+		}
+	}
+	return false
+}
+
 func (it *xorIterator) At() (int64, float64) {
 	return it.t, it.val
 }
