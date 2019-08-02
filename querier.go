@@ -1148,15 +1148,27 @@ func (it *verticalMergeChunkIterator) Next() bool {
 		return true
 	}
 
+
+	it.curMeta, it.err = mergeOverlappingChunks(aCurMeta, bCurMeta, it.aReuseIter, it.bReuseIter)
+	if it.err != nil {
+		return false
+	}
+
+	it.aok = it.a.Next()
+	it.bok = it.b.Next()
+	return true
+}
+
+// TODO: https://github.com/prometheus/tsdb/issues/670
+func mergeOverlappingChunks(a, b chunks.Meta, aReuseIter, bReuseIter chunkenc.Iterator) (chunks.Meta, error) {
 	chk := chunkenc.NewXORChunk()
 	app, err := chk.Appender()
 	if err != nil {
-		it.err = err
-		return false
+		return chunks.Meta{}, err
 	}
 	seriesIter := &verticalMergeSeriesIterator{
-		a: aCurMeta.Chunk.Iterator(it.aReuseIter),
-		b: bCurMeta.Chunk.Iterator(it.bReuseIter),
+		a: a.Chunk.Iterator(aReuseIter),
+		b: b.Chunk.Iterator(bReuseIter),
 	}
 
 	mint := int64(math.MaxInt64)
@@ -1173,18 +1185,14 @@ func (it *verticalMergeChunkIterator) Next() bool {
 		}
 	}
 	if err := seriesIter.Err(); err != nil {
-		it.err = err
-		return false
+		return chunks.Meta{}, err
 	}
 
-	it.curMeta = chunks.Meta{
-		MinTime: mint,
-		MaxTime: maxt,
-		Chunk:   chk,
-	}
-	it.aok = it.a.Next()
-	it.bok = it.b.Next()
-	return true
+	return chunks.Meta{
+			MinTime: mint,
+			MaxTime: maxt,
+			Chunk:   chk,
+	}, nil
 }
 
 func (it *verticalMergeChunkIterator) Seek(t int64) bool {

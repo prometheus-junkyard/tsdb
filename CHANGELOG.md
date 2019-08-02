@@ -1,5 +1,7 @@
 ## master / unreleased
 
+- [CHANGE] `chunks.MergeOverlappingChunks` moved to `tsdb.MergeOverlappingChunks`
+
 ## 0.10.0
 
  - [FEATURE] Added `DBReadOnly` to allow opening a database in read only mode.
