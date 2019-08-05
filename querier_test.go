@@ -179,7 +179,7 @@ Outer:
 	}
 }
 
-func expandSeriesIterator(it SeriesIterator) (r []tsdbutil.Sample, err error) {
+func expandSeriesIterator(it chunkenc.Iterator) (r []tsdbutil.Sample, err error) {
 	for it.Next() {
 		t, v := it.At()
 		r = append(r, sample{t: t, v: v})
@@ -271,7 +271,7 @@ func TestBlockQuerier(t *testing.T) {
 	newSeries := func(l map[string]string, s []tsdbutil.Sample) Series {
 		return &mockSeries{
 			labels:   func() labels.Labels { return labels.FromMap(l) },
-			iterator: func() SeriesIterator { return newListSeriesIterator(s) },
+			iterator: func() chunkenc.Iterator { return newListSeriesIterator(s) },
 		}
 	}
 
@@ -409,7 +409,7 @@ func TestBlockQuerierDelete(t *testing.T) {
 	newSeries := func(l map[string]string, s []tsdbutil.Sample) Series {
 		return &mockSeries{
 			labels:   func() labels.Labels { return labels.FromMap(l) },
-			iterator: func() SeriesIterator { return newListSeriesIterator(s) },
+			iterator: func() chunkenc.Iterator { return newListSeriesIterator(s) },
 		}
 	}
 
@@ -665,10 +665,10 @@ func TestBaseChunkSeries(t *testing.T) {
 
 // TODO: Remove after simpleSeries is merged
 type itSeries struct {
-	si SeriesIterator
+	si chunkenc.Iterator
 }
 
-func (s itSeries) Iterator() SeriesIterator     { return s.si }
+func (s itSeries) Iterator() chunkenc.Iterator  { return s.si }
 func (s itSeries) Labels() labels.Labels        { return labels.Labels{} }
 func (s itSeries) ChunkIterator() ChunkIterator { return nil }
 
@@ -1013,7 +1013,7 @@ func TestSeriesIterator(t *testing.T) {
 
 		t.Run("Seek", func(t *testing.T) {
 			for _, tc := range seekcases {
-				ress := []SeriesIterator{
+				ress := []chunkenc.Iterator{
 					newChainedSeriesIterator(
 						itSeries{newListSeriesIterator(tc.a)},
 						itSeries{newListSeriesIterator(tc.b)},
@@ -1478,17 +1478,17 @@ func (m mockIndex) LabelNames() ([]string, error) {
 
 type mockSeries struct {
 	labels   func() labels.Labels
-	iterator func() SeriesIterator
+	iterator func() chunkenc.Iterator
 }
 
 func newSeries(l map[string]string, s []tsdbutil.Sample) Series {
 	return &mockSeries{
 		labels:   func() labels.Labels { return labels.FromMap(l) },
-		iterator: func() SeriesIterator { return newListSeriesIterator(s) },
+		iterator: func() chunkenc.Iterator { return newListSeriesIterator(s) },
 	}
 }
 func (m *mockSeries) Labels() labels.Labels        { return m.labels() }
-func (m *mockSeries) Iterator() SeriesIterator     { return m.iterator() }
+func (m *mockSeries) Iterator() chunkenc.Iterator  { return m.iterator() }
 func (m *mockSeries) ChunkIterator() ChunkIterator { return nil }
 
 type listSeriesIterator struct {

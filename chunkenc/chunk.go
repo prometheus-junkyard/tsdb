@@ -56,7 +56,7 @@ type Appender interface {
 	Append(int64, float64)
 }
 
-// Iterator is a simple iterator that can only get the next value.
+// Iterator iterates over the data of a time series.
 type Iterator interface {
 	// Seek advances the iterator forward to the given timestamp.
 	// If there's no value exactly at t, it advances to the first value

@@ -54,9 +54,9 @@ type Series interface {
 	Labels() labels.Labels
 
 	// Iterator returns a new iterator of the data of the series.
-	Iterator() SeriesIterator
+	Iterator() chunkenc.Iterator
 
-	// ChunkIterator returns a new iterator for the non-overlapping chunks of the series.
+	// ChunkIterator returns a new iterator that iterates over non-overlapping chunks of the series.
 	ChunkIterator() ChunkIterator
 }
 
@@ -876,26 +876,12 @@ func (s *chunkSeries) Labels() labels.Labels {
 	return s.labels
 }
 
-func (s *chunkSeries) Iterator() SeriesIterator {
+func (s *chunkSeries) Iterator() chunkenc.Iterator {
 	return newChunkSeriesIterator(s.chunks, s.intervals, s.mint, s.maxt)
 }
 
 func (s *chunkSeries) ChunkIterator() ChunkIterator {
 	return &chunkIterator{chunks: s.chunks}
-}
-
-// SeriesIterator iterates over the data of a time series.
-type SeriesIterator interface {
-	// Seek advances the iterator forward to the given timestamp.
-	// If there's no value exactly at t, it advances to the first value
-	// after t.
-	Seek(t int64) bool
-	// At returns the current timestamp/value pair.
-	At() (t int64, v float64)
-	// Next advances the iterator by one.
-	Next() bool
-	// Err returns the current error.
-	Err() error
 }
 
 // chainedSeries implements a series for a list of time-sorted series.
@@ -908,7 +894,7 @@ func (s *chainedSeries) Labels() labels.Labels {
 	return s.series[0].Labels()
 }
 
-func (s *chainedSeries) Iterator() SeriesIterator {
+func (s *chainedSeries) Iterator() chunkenc.Iterator {
 	return newChainedSeriesIterator(s.series...)
 }
 
@@ -926,7 +912,7 @@ type chainedSeriesIterator struct {
 	series []Series // series in time order
 
 	i   int
-	cur SeriesIterator
+	cur chunkenc.Iterator
 }
 
 func newChainedSeriesIterator(s ...Series) *chainedSeriesIterator {
@@ -987,7 +973,7 @@ func (s *verticalChainedSeries) Labels() labels.Labels {
 	return s.series[0].Labels()
 }
 
-func (s *verticalChainedSeries) Iterator() SeriesIterator {
+func (s *verticalChainedSeries) Iterator() chunkenc.Iterator {
 	return newVerticalMergeSeriesIterator(s.series...)
 }
 
@@ -998,14 +984,14 @@ func (s *verticalChainedSeries) ChunkIterator() ChunkIterator {
 // verticalMergeSeriesIterator implements a series iterator over a list
 // of time-sorted, time-overlapping iterators.
 type verticalMergeSeriesIterator struct {
-	a, b                  SeriesIterator
+	a, b                  chunkenc.Iterator
 	aok, bok, initialized bool
 
 	curT int64
 	curV float64
 }
 
-func newVerticalMergeSeriesIterator(s ...Series) SeriesIterator {
+func newVerticalMergeSeriesIterator(s ...Series) chunkenc.Iterator {
 	if len(s) == 1 {
 		return s[0].Iterator()
 	} else if len(s) == 2 {
@@ -1148,7 +1134,6 @@ func (it *verticalMergeChunkIterator) Next() bool {
 		return true
 	}
 
-
 	it.curMeta, it.err = mergeOverlappingChunks(aCurMeta, bCurMeta, it.aReuseIter, it.bReuseIter)
 	if it.err != nil {
 		return false
@@ -1189,9 +1174,9 @@ func mergeOverlappingChunks(a, b chunks.Meta, aReuseIter, bReuseIter chunkenc.It
 	}
 
 	return chunks.Meta{
-			MinTime: mint,
-			MaxTime: maxt,
-			Chunk:   chk,
+		MinTime: mint,
+		MaxTime: maxt,
+		Chunk:   chk,
 	}, nil
 }
 
