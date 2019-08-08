@@ -60,6 +60,19 @@ type Series interface {
 	ChunkIterator() ChunkIterator
 }
 
+// ChunkIterator iterates over the chunk of a time series.
+type ChunkIterator interface {
+	// Seek advances the iterator forward to the given timestamp.
+	// It advances to the chunk with min time at t or first chunk with min time after t.
+	Seek(t int64) bool
+	// At returns the meta.
+	At() chunks.Meta
+	// Next advances the iterator by one.
+	Next() bool
+	// Err returns optional error if Next is false.
+	Err() error
+}
+
 // querier aggregates querying results from time blocks within
 // a single partition.
 type querier struct {
@@ -942,7 +955,7 @@ func (it *chainedSeriesIterator) Next() bool {
 	if it.cur.Next() {
 		return true
 	}
-	if err := it.cur.Err(); err != nil {
+	if it.cur.Err() != nil {
 		return false
 	}
 	if it.i == len(it.series)-1 {
@@ -1007,6 +1020,10 @@ func newVerticalMergeSeriesIterator(s ...Series) chunkenc.Iterator {
 }
 
 func (it *verticalMergeSeriesIterator) Seek(t int64) bool {
+	if it.initialized && it.curT >= t {
+		return true
+	}
+
 	it.aok, it.bok = it.a.Seek(t), it.b.Seek(t)
 	it.initialized = true
 	return it.Next()
@@ -1157,7 +1174,7 @@ func mergeOverlappingChunks(a, b chunks.Meta, aReuseIter, bReuseIter chunkenc.It
 	}
 
 	mint := int64(math.MaxInt64)
-	maxt := int64(0)
+	maxt := int64(math.MinInt64)
 
 	// TODO: This can end up being up to 240 samples per chunk, so we need to have a case to split to two.
 	for seriesIter.Next() {
@@ -1243,31 +1260,40 @@ func (it *chunkSeriesIterator) resetCurIterator() {
 	it.cur = it.bufDelIter
 }
 
-func (it *chunkSeriesIterator) Seek(t int64) (ok bool) {
-	if t > it.maxt {
+func (it *chunkSeriesIterator) Seek(t int64) bool {
+	if it.Err() != nil || t > it.maxt || it.i > len(it.chunks)-1 {
+		// Exhaust iterator.
+		it.i = len(it.chunks)
 		return false
 	}
 
-	// Seek to the first valid value after t.
 	if t < it.mint {
 		t = it.mint
 	}
 
+	currI := it.i
 	for ; it.chunks[it.i].MaxTime < t; it.i++ {
 		if it.i == len(it.chunks)-1 {
+			// Exhaust iterator.
+			it.i = len(it.chunks)
 			return false
 		}
 	}
 
-	it.resetCurIterator()
-
-	for it.cur.Next() {
-		t0, _ := it.cur.At()
-		if t0 >= t {
-			return true
-		}
+	if currI != it.i {
+		it.resetCurIterator()
 	}
-	return false
+
+	tc, _ := it.cur.At()
+	for t > tc {
+		if !it.cur.Next() {
+			// Exhaust iterator.
+			it.i = len(it.chunks)
+			return false
+		}
+		tc, _ = it.cur.At()
+	}
+	return true
 }
 
 func (it *chunkSeriesIterator) At() (t int64, v float64) {
@@ -1275,6 +1301,10 @@ func (it *chunkSeriesIterator) At() (t int64, v float64) {
 }
 
 func (it *chunkSeriesIterator) Next() bool {
+	if it.Err() != nil || it.i > len(it.chunks)-1 {
+		return false
+	}
+
 	if it.cur.Next() {
 		t, _ := it.cur.At()
 
@@ -1368,19 +1398,6 @@ type errSeriesSet struct {
 func (s errSeriesSet) Next() bool { return false }
 func (s errSeriesSet) At() Series { return nil }
 func (s errSeriesSet) Err() error { return s.err }
-
-// ChunkIterator iterates over the chunk of a time series.
-type ChunkIterator interface {
-	// Seek advances the iterator forward to the given timestamp.
-	// It advances to the chunk with min time at t or first chunk with min time after t.
-	Seek(t int64) bool
-	// At returns the meta.
-	At() chunks.Meta
-	// Next advances the iterator by one.
-	Next() bool
-	// Err returns optional error if Next is false.
-	Err() error
-}
 
 type chunkIterator struct {
 	chunks []chunks.Meta // series in time order

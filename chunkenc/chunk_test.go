@@ -107,7 +107,7 @@ func testChunk(t *testing.T, c Chunk) {
 	testutil.Ok(t, it3.Err())
 	testutil.Equals(t, all[mid:], res3)
 
-	testutil.Equals(t, false, it3.Seek(all[len(all)-1].t + 1))
+	testutil.Equals(t, false, it3.Seek(all[len(all)-1].t+1))
 }
 
 func benchmarkIterator(b *testing.B, newChunk func() Chunk) {
