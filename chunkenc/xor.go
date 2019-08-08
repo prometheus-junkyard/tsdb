@@ -242,16 +242,16 @@ type xorIterator struct {
 }
 
 func (it *xorIterator) Seek(t int64) bool {
-	if t >= it.t {
+	if it.err != nil {
 		return false
 	}
 
-	for it.Next() {
-		if t >= it.t {
-			return true
+	for t > it.t || it.numRead == 0 {
+		if !it.Next() {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (it *xorIterator) At() (int64, float64) {

@@ -58,9 +58,10 @@ type Appender interface {
 
 // Iterator iterates over the data of a time series.
 type Iterator interface {
-	// Seek advances the iterator forward to the given timestamp.
-	// If there's no value exactly at t, it advances to the first value
-	// after t.
+	// Seek advances the iterator forward to the sample with the timestamp t or first value after t.
+	// If the current iterator points to the sample with timestamp after t already,
+	// Seek should not advance the iterator.
+	// Seek returns false if there is no such sample with the timestamp equal or larger than t.
 	Seek(t int64) bool
 	// At returns the current timestamp/value pair.
 	At() (int64, float64)

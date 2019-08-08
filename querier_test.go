@@ -924,7 +924,7 @@ func TestSeriesIterator(t *testing.T) {
 				if tc.success {
 					// Init the list and then proceed to check.
 					remaining := exp.Next()
-					testutil.Assert(t, remaining == true, "")
+					testutil.Assert(t, remaining, "")
 
 					for remaining {
 						sExp, eExp := exp.At()
@@ -1034,7 +1034,7 @@ func TestSeriesIterator(t *testing.T) {
 					if tc.success {
 						// Init the list and then proceed to check.
 						remaining := exp.Next()
-						testutil.Assert(t, remaining == true, "")
+						testutil.Assert(t, remaining, "")
 
 						for remaining {
 							sExp, eExp := exp.At()
@@ -1101,8 +1101,8 @@ func TestChunkSeriesIterator_DoubleSeek(t *testing.T) {
 	}
 
 	res := newChunkSeriesIterator(chkMetas, nil, 2, 8)
-	testutil.Assert(t, res.Seek(1) == true, "")
-	testutil.Assert(t, res.Seek(2) == true, "")
+	testutil.Assert(t, res.Seek(1), "")
+	testutil.Assert(t, res.Seek(2), "")
 	ts, v := res.At()
 	testutil.Equals(t, int64(2), ts)
 	testutil.Equals(t, float64(2), v)
@@ -1119,12 +1119,12 @@ func TestChunkSeriesIterator_SeekInCurrentChunk(t *testing.T) {
 
 	it := newChunkSeriesIterator(metas, nil, 1, 7)
 
-	testutil.Assert(t, it.Next() == true, "")
+	testutil.Assert(t, it.Next(), "")
 	ts, v := it.At()
 	testutil.Equals(t, int64(1), ts)
 	testutil.Equals(t, float64(2), v)
 
-	testutil.Assert(t, it.Seek(4) == true, "")
+	testutil.Assert(t, it.Seek(4), "")
 	ts, v = it.At()
 	testutil.Equals(t, int64(5), ts)
 	testutil.Equals(t, float64(6), v)
